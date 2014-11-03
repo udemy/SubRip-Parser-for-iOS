@@ -29,7 +29,7 @@
 - (NSString*)description
 {
     NSMutableString *text = [NSMutableString string];
-    [text appendFormat:@"SubRipItems: number of items %i, ", [self.items count]];
+    [text appendFormat:@"SubRipItems: number of items %lu, ", [self.items count]];
     
     SubRipItem *lastItem = [self.items lastObject];
     NSTimeInterval timeInterval = lastItem.endTime;
