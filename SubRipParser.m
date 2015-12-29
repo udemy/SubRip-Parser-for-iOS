@@ -135,13 +135,13 @@
     int minute = 0;
     int second = 0;
     NSArray *hourMinSec = [components.firstObject componentsSeparatedByString:@":"];
-    if (hourMinSec.count > 1) {
+    if (hourMinSec.count > 0) {
         hour = [hourMinSec[0] intValue];
     }
-    if (hourMinSec.count > 2) {
+    if (hourMinSec.count > 1) {
         minute = [hourMinSec[1] intValue];
     }
-    if (hourMinSec.count > 3) {
+    if (hourMinSec.count > 2) {
         second = [hourMinSec[2] intValue];
     }
     
