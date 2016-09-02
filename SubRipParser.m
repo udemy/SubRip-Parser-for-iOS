@@ -61,6 +61,11 @@
 - (void)parseWithBlock:(void (^)(BOOL, SubRipItems *))block
 {
     dispatch_async(dispatch_queue_create("parse subrip file", 0), ^{
+       
+        if([self.subripContent hasPrefix:@"WEBVTT"]) {
+            NSRange range = [self.subripContent rangeOfString:@"00:"];
+            self.subripContent = [self.subripContent substringFromIndex:range.location];
+        }
         
         self.subripContent = [self.subripContent stringByReplacingOccurrencesOfString:@"\n\r\n" withString:@"\n\n"];
         self.subripContent = [self.subripContent stringByReplacingOccurrencesOfString:@"\n\n\n" withString:@"\n\n"];
@@ -84,44 +89,69 @@
     });
 }
 
-- (SubRipItem*)parseSubRipItem:(NSString*)text
-{
+- (SubRipItem*)parseSubRipItem:(NSString*)text {
     NSArray *lines = [text componentsSeparatedByString:@"\n"];
-    // SubRipt format requires at least 3 lines
+    SubRipItem *subRipItem = [SubRipItem subRipItem];
     
-    if ([lines count]>=3)
-    {
-        SubRipItem *subRipItem = [SubRipItem subRipItem];
+    if ([lines count] >= 3) {
+        // SubRipt format requires at least 3 lines
+        // srt parsing
         subRipItem.subtitleNumber = [lines[0] intValue];
-        
-        NSArray *timeRange = [lines[1] componentsSeparatedByString:@"-->"];
-        // there will always be 2 items in time range
-        if ([timeRange count]==2)
-        {
-            NSString *startTimeString = [timeRange[0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSString *endTimeString = [timeRange[1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if([self createSubripItem:subRipItem lines:[lines subarrayWithRange:NSMakeRange(1, lines.count - 1)]]) {
+            return subRipItem;
+        }
+    } else if ([lines count] == 2) {
+        // webvtt parsing
+        subRipItem.subtitleNumber = 0; // not defined in webvtt
+        if([self createSubripItem:subRipItem lines:lines]) {
+            return subRipItem;
+        }
+    }
+    return nil;
+}
 
+- (BOOL) createSubripItem:(SubRipItem *)subRipItem lines:(NSArray *)lines {
+    NSArray *timeRange = [lines[0] componentsSeparatedByString:@"-->"];
+    // there will always be 2 items in time range
+    if ([timeRange count]==2) {
+        NSString *startTimeString = [self parseTimeString:timeRange[0]];
+        NSString *endTimeString = [self parseTimeString:timeRange[1]];
+        
+        if(startTimeString && endTimeString) {
             subRipItem.startTime = [self timeIntervalFromSubRipTimeString:startTimeString] + self.timeOffset;
             subRipItem.endTime = [self timeIntervalFromSubRipTimeString:endTimeString] + self.timeOffset;
-            
+        } else {
+            return false;
         }
-        else
-        {
-            return nil;
-        }
-        
-        NSMutableString *text = [NSMutableString string];
-        for (int i=2; i<[lines count]; i++)
-        {
-            [text appendFormat:@"%@\n", lines[i]];
-        }
-        subRipItem.text = text;
-        return subRipItem;
+    } else {
+        return false;
     }
-    else
-    {
+    
+    subRipItem.text = [self parseText:[lines subarrayWithRange:NSMakeRange(1, lines.count - 1)]];
+    return true;
+}
+
+- (NSString *) parseTimeString:(NSString *)timeString {
+    if(!timeString) {
         return nil;
     }
+    timeString = [timeString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if(timeString && timeString.length >= 12) {
+        // Make sure that we're getting exact amount of string to parse the time e.g 00:01:17.220
+        // especially for end time string there can be some CSS styling at the end of time string so
+        // we need to substring
+        timeString = [timeString substringWithRange:NSMakeRange(0, 12)];
+        return timeString;
+    }
+    return nil;
+}
+
+- (NSString *) parseText:(NSArray *)lines {
+    NSMutableString *text = [NSMutableString string];
+    for (int i=0; i<[lines count]; i++) {
+        [text appendFormat:@"%@\n", lines[i]];
+    }
+    return text;
 }
 
 - (NSTimeInterval)timeIntervalFromSubRipTimeString:(NSString*)text
